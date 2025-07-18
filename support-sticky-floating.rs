@@ -27,6 +27,8 @@ use std::process::{
 	Stdio,
 };
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 static mut FLOATING_WINDOWS: *mut HashMap<u64, FloatingWindow> = std::ptr::null_mut();
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -61,7 +63,7 @@ enum Event {
 	WorkspaceActivated(WorkspaceFocused),
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
 	unsafe {
 		if FLOATING_WINDOWS.is_null() {
 			FLOATING_WINDOWS = Box::into_raw(Box::new(HashMap::new()));
@@ -101,48 +103,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}
 	}
 
-	let status = child.wait()?;
+	child.wait()?;
 
 	Ok(())
 }
 
-fn move_window_to_workspace(workspace_id: &str, id: u64) {
+fn move_window_to_workspace(workspace_id: &str, id: u64) -> Result<()> {
 	Command::new("niri")
 		.args(["msg", "action", "move-window-to-workspace", "--focus", "true"])
 		.arg("--window-id")
 		.arg(id.to_string())
 		.arg(workspace_id)
-		.spawn()
-		.unwrap();
+		.spawn()?;
+
+	Ok(())
 }
 
-fn get_workspace_info(id: u64) -> Workspace {
+fn get_workspace_info(id: u64) -> Result<Workspace> {
 	let output = Command::new("niri")
 		.args(["msg", "--json", "workspaces"])
 		.stdout(Stdio::piped())
-		.spawn()
-		.unwrap()
-		.wait_with_output()
-		.unwrap();
+		.spawn()?
+		.wait_with_output()?;
 
 	let output = String::from_utf8_lossy(&output.stdout);
 
-	let workspaces: Vec<Workspace> = serde_json::from_str(&output).unwrap();
+	let workspaces: Vec<Workspace> = serde_json::from_str(&output)?;
 
-	let workspace = workspaces.into_iter().find(|it| it.id == id).unwrap();
+	let workspace = workspaces
+		.into_iter()
+		.find(|it| it.id == id)
+		.ok_or("Workspace not found")?;
 
-	workspace
+	Ok(workspace)
 }
 
 fn on_workspace_activated(workspace: WorkspaceFocused) {
-	let workspace = get_workspace_info(workspace.id);
+	let Ok(workspace) = get_workspace_info(workspace.id) else {
+		return;
+	};
+
 	let target = workspace.name.unwrap_or(workspace.id.to_string());
 
 	for (window, window_info) in unsafe { &(*FLOATING_WINDOWS) } {
-		if workspace.output.as_ref().unwrap() != window_info.output.as_ref().unwrap() {
+		if workspace.output.as_ref() != window_info.output.as_ref() {
 			continue;
 		}
-		move_window_to_workspace(target.as_str(), *window);
+		move_window_to_workspace(target.as_str(), *window).ok();
 	}
 }
 
@@ -160,7 +167,9 @@ fn on_window_changes(window: WindowOpenedOrChanged) {
 		return;
 	}
 
-	let parent_workspace = get_workspace_info(window.workspace_id);
+	let Ok(parent_workspace) = get_workspace_info(window.workspace_id) else {
+		return;
+	};
 
 	let window = FloatingWindow {
 		id: window.id,
