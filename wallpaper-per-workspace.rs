@@ -155,7 +155,7 @@ fn main() -> io::Result<()> {
 	let wallpapers_dir = std::env::args()
 		.nth(1)
 		.or_else(|| std::env::var("WALLPAPERS_DIRS").ok())
-		.expect("need first argument to be the dir of your wallpapers");
+		.unwrap_or_else(|| env!("HOME").to_string() + "/.wallpapers");
 
 	unsafe {
 		if WALLPAPERS_DIR.is_null() {
