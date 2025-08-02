@@ -2,7 +2,7 @@
 
 ## Overview
 
-This script makes floating windows **sticky** across all workspaces in the [Niri Window Manager](https://github.com/YaLTeR/niri). Any floating window will be moved to the focused workspace, allowing it to follow you across different workspaces.
+A set of scripts I made to automate and enhance my Linux desktop, with optional support for [Niri Window Manager](https://github.com/YaLTeR/niri) and other setups.
 
 https://github.com/user-attachments/assets/fab73541-c683-49b3-80da-ae1d3a110348
 
