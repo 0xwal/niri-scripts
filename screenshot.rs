@@ -13,12 +13,14 @@
 //    content: |
 //     package = { name = "screenshot", version = "0.1.0", edition = "2024"}
 //     [dependencies]
+//     scopeguard = "1.2.0"
 // scriptisto-end
 
 #![allow(dead_code)]
 #![deny(warnings)]
 #![deny(clippy::unwrap_used)]
 
+use scopeguard::defer;
 use std::process::{
 	Command,
 	Stdio,
@@ -70,6 +72,22 @@ fn annotate_screenshot(path: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
+	let lock_file_path = ".screenshot.lock";
+
+	if std::fs::exists(lock_file_path).unwrap_or(false) {
+		println!(
+			"Screenshot already in progress, exiting. delete {} to force",
+			lock_file_path
+		);
+		std::process::exit(0);
+	}
+
+	std::fs::write(lock_file_path, "").expect("Failed to write lock file");
+
+	defer! {
+		std::fs::remove_file(lock_file_path).ok();
+	};
+
 	let screenshots_dir = std::env::args().nth(1).expect("No screenshot directory specified");
 
 	let time = SystemTime::now()
