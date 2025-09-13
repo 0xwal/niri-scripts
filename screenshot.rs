@@ -101,5 +101,18 @@ fn main() {
 		return;
 	}
 
-	annotate_screenshot(&path).expect("Failed to annotate screenshot");
+	if std::env::args().any(|arg| arg == "--annotate") {
+		annotate_screenshot(&path).expect("Failed to annotate screenshot");
+	} else {
+		let content = std::fs::File::open(&path).expect("Failed to open screenshot");
+
+		let mut cmd = Command::new("wl-copy");
+		let child = cmd.stdin(Stdio::from(content));
+
+		child
+			.spawn()
+			.expect("Could not spawn wl-copy")
+			.wait()
+			.expect("Failed to copy screenshot");
+	}
 }

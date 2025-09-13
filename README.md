@@ -27,6 +27,7 @@ To improve workflow by keeping floating windows available on every workspace unt
     - [grim](https://github.com/GrimAnticheat/Grim)
     - [satty](https://github.com/gabm/Satty)
     - [slurp](https://github.com/emersion/slurp)
+    - [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (only used when you don't use --annotate)
 
 
 ## Installation
