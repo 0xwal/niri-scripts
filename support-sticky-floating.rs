@@ -1,5 +1,7 @@
 #!/usr/bin/env scriptisto
+// vim: shiftwidth=2 softtabstop=2
 
+// TASK:
 // #region meta
 // scriptisto-begin
 // script_src: src/main.rs
@@ -61,6 +63,7 @@ struct Workspace {
 enum Event {
 	WindowOpenedOrChanged { window: WindowOpenedOrChanged },
 	WorkspaceActivated(WorkspaceFocused),
+	WindowClosed { id: u64 },
 }
 
 fn main() -> Result<()> {
@@ -94,6 +97,11 @@ fn main() -> Result<()> {
 					Ok(Event::WorkspaceActivated(workspace)) => {
 						on_workspace_activated(workspace);
 					}
+					Ok(Event::WindowClosed {
+						id,
+					}) => {
+						on_window_close(id);
+					}
 					_ => (),
 				}
 			}
@@ -114,7 +122,7 @@ fn move_window_to_workspace(workspace_id: &str, id: u64) -> Result<()> {
 		.arg("--window-id")
 		.arg(id.to_string())
 		.arg(workspace_id)
-		.spawn()?;
+		.output()?;
 
 	Ok(())
 }
@@ -139,6 +147,10 @@ fn get_workspace_info(id: u64) -> Result<Workspace> {
 }
 
 fn on_workspace_activated(workspace: WorkspaceFocused) {
+	if unsafe { (*FLOATING_WINDOWS).is_empty() } {
+		return;
+	}
+
 	let Ok(workspace) = get_workspace_info(workspace.id) else {
 		return;
 	};
@@ -179,5 +191,11 @@ fn on_window_changes(window: WindowOpenedOrChanged) {
 
 	unsafe {
 		(*FLOATING_WINDOWS).insert(window.id, window);
+	}
+}
+
+fn on_window_close(window_id: u64) {
+	unsafe {
+		(*FLOATING_WINDOWS).remove(&window_id);
 	}
 }
