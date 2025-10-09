@@ -1,5 +1,5 @@
 #!/usr/bin/env scriptisto
-// vim: shiftwidth=2 softtabstop=2
+// vim: ft=rust shiftwidth=2 softtabstop=2
 
 // TASK:
 // #region meta
@@ -23,6 +23,11 @@ use std::collections::HashMap;
 use std::io::{
 	BufRead,
 	BufReader,
+	Write,
+};
+use std::os::unix::net::{
+	UnixListener,
+	UnixStream,
 };
 use std::process::{
 	Command,
@@ -31,7 +36,8 @@ use std::process::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-static mut FLOATING_WINDOWS: *mut HashMap<u64, FloatingWindow> = std::ptr::null_mut();
+static mut STICKY_WINDOWS: *mut HashMap<u64, FloatingWindow> = std::ptr::null_mut();
+const IPC_FILE: &'static str = "/tmp/niri-floating.sock";
 
 #[derive(Debug, Eq, Hash, PartialEq)]
 struct FloatingWindow {
@@ -67,11 +73,20 @@ enum Event {
 }
 
 fn main() -> Result<()> {
+	if std::env::args().find(|e| e == "toggle-sticky").is_some() {
+		toggle_sticky();
+		return Ok(());
+	}
+
 	unsafe {
-		if FLOATING_WINDOWS.is_null() {
-			FLOATING_WINDOWS = Box::into_raw(Box::new(HashMap::new()));
+		if STICKY_WINDOWS.is_null() {
+			STICKY_WINDOWS = Box::into_raw(Box::new(HashMap::new()));
 		}
 	}
+
+	std::fs::remove_file(IPC_FILE).ok();
+
+	std::thread::spawn(socket_loop);
 
 	let mut child = Command::new("niri")
 		.arg("msg")
@@ -116,6 +131,76 @@ fn main() -> Result<()> {
 	Ok(())
 }
 
+fn toggle_sticky() {
+	let Ok(output) = Command::new("niri")
+		.args(&["msg", "--json", "focused-window"])
+		.stdout(Stdio::piped())
+		.output()
+	else {
+		return;
+	};
+
+	#[derive(Debug, serde::Deserialize)]
+	struct WindowInfo {
+		id: u64,
+		workspace_id: u64,
+		is_focused: bool,
+	}
+
+	let output = String::from_utf8_lossy(&output.stdout);
+
+	let Ok(window_info) = serde_json::from_str::<WindowInfo>(&output) else {
+		return;
+	};
+
+	let mut unix = UnixStream::connect(IPC_FILE).unwrap();
+
+	unix.write(format!("{}:{}", window_info.id, window_info.workspace_id).as_bytes()).ok();
+}
+
+fn socket_loop() {
+	let listener = UnixListener::bind(IPC_FILE).expect(&format!("We couldn't make the listener"));
+
+	for stream in listener.incoming() {
+		if let Ok(stream) = stream {
+			let mut reader = BufReader::new(stream);
+			let mut line = String::new();
+			if let Ok(_) = reader.read_line(&mut line) {
+				let mut chunks = line.split(':');
+
+				let Some(window_id) = chunks.next().map(|e| e.trim()).and_then(|s| s.parse::<u64>().ok()) else {
+					continue;
+				};
+
+				let Some(workspace_id) = chunks.next().map(|e| e.trim()).and_then(|s| s.parse::<u64>().ok()) else {
+					continue;
+				};
+
+				unsafe {
+					if (*STICKY_WINDOWS).contains_key(&window_id) {
+						(*STICKY_WINDOWS).remove(&window_id);
+						continue;
+					}
+				}
+
+				let Ok(workspace) = get_workspace_info(workspace_id) else {
+					return;
+				};
+
+				let window = FloatingWindow {
+					id: window_id,
+					workspace_id: workspace.id,
+					output: workspace.output,
+				};
+
+				unsafe {
+					(*STICKY_WINDOWS).insert(window_id, window);
+				}
+			}
+		}
+	}
+}
+
 fn move_window_to_workspace(workspace_id: &str, id: u64) -> Result<()> {
 	Command::new("niri")
 		.args(["msg", "action", "move-window-to-workspace", "--focus", "true"])
@@ -147,7 +232,7 @@ fn get_workspace_info(id: u64) -> Result<Workspace> {
 }
 
 fn on_workspace_activated(workspace: WorkspaceFocused) {
-	if unsafe { (*FLOATING_WINDOWS).is_empty() } {
+	if unsafe { (*STICKY_WINDOWS).is_empty() } {
 		return;
 	}
 
@@ -157,7 +242,7 @@ fn on_workspace_activated(workspace: WorkspaceFocused) {
 
 	let target = workspace.name.unwrap_or(workspace.id.to_string());
 
-	for (window, window_info) in unsafe { &(*FLOATING_WINDOWS) } {
+	for (window, window_info) in unsafe { &(*STICKY_WINDOWS) } {
 		if workspace.output.as_ref() != window_info.output.as_ref() {
 			continue;
 		}
@@ -166,15 +251,19 @@ fn on_workspace_activated(workspace: WorkspaceFocused) {
 }
 
 fn on_window_changes(window: WindowOpenedOrChanged) {
-	let already_tracked = unsafe { (*FLOATING_WINDOWS).contains_key(&window.id) };
+	let already_tracked = unsafe { (*STICKY_WINDOWS).contains_key(&window.id) };
 
 	if !window.is_floating && !already_tracked {
 		return;
 	}
 
+	if window.is_floating && !already_tracked {
+		return;
+	}
+
 	if !window.is_floating {
 		unsafe {
-			(*FLOATING_WINDOWS).remove(&window.id);
+			(*STICKY_WINDOWS).remove(&window.id);
 		}
 		return;
 	}
@@ -190,12 +279,12 @@ fn on_window_changes(window: WindowOpenedOrChanged) {
 	};
 
 	unsafe {
-		(*FLOATING_WINDOWS).insert(window.id, window);
+		(*STICKY_WINDOWS).insert(window.id, window);
 	}
 }
 
 fn on_window_close(window_id: u64) {
 	unsafe {
-		(*FLOATING_WINDOWS).remove(&window_id);
+		(*STICKY_WINDOWS).remove(&window_id);
 	}
 }

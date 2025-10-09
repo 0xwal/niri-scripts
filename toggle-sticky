@@ -1,0 +1,4 @@
+#!/bin/sh
+# set ft=bash
+
+./support-sticky-floating toggle-sticky
