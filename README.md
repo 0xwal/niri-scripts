@@ -1,4 +1,4 @@
-# Niri WM Sticky Floating Support Extension
+# My Niri scripts to extend its functionality
 
 ## Overview
 
@@ -7,16 +7,14 @@ A set of scripts I made to automate and enhance my Linux desktop, with optional 
 https://github.com/user-attachments/assets/fab73541-c683-49b3-80da-ae1d3a110348
 
 ## Why?
+I like Niri and wanted to extend its functinality for my needs.
 
-To improve workflow by keeping floating windows available on every workspace until these features are supported natively.
 
 ## Features
 
 * **Sticky Floating**: Moves any floating window to the focused workspace.
 * **Wallpaper Per Workspace**: Assign a wallpaper for each individual workspace.
 * **Screenshot**: Take screenshot then annotate it.
-
-**Note**: In the future, floating and sticky functionality will be split into separate features.
 
 ## Dependencies
 
@@ -29,6 +27,7 @@ To improve workflow by keeping floating windows available on every workspace unt
     - [slurp](https://github.com/emersion/slurp)
     - [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (only used when you don't use --annotate)
 
+---
 
 ## Installation
 
@@ -38,31 +37,40 @@ To improve workflow by keeping floating windows available on every workspace unt
 
 2. Make the scripts executable:
 
-   `chmod +x niri-scripts/support-sticky-floating.rs`
+   `chmod +x niri-scripts/support-sticky-floating`
+   `chmod +x niri-scripts/toggle-sticky`
 
-   `chmod +x niri-scripts/wallpaper-per-workspace.rs`
+   `chmod +x niri-scripts/wallpaper-per-workspace`
 
-   `chmod +x niri-scripts/screenshot.rs`
+   `chmod +x niri-scripts/screenshot`
 
 ## Running
 
 ### Run the scripts:
 
-`niri-scripts/support-sticky-floating.rs &`
+`niri-scripts/support-sticky-floating &`
 
-`niri-scripts/wallpaper-per-workspace.rs <WALLPAPER_DIR> &`
-
-`niri-scripts/screenshot.rs <PATH_TO_SAVE_SCREENSHOT> &`
+`niri-scripts/wallpaper-per-workspace <WALLPAPER_DIR> &`
 
 `disown`
 
 OR within your config:
 
-`spawn-at-startup "dir/niri-scripts/support-sticky-floating.rs"`
+```kdl
+spawn-sh-at-startup "niri-scripts/support-sticky-floating"
 
-`spawn-at-startup "dir/niri-scripts/wallpaper-per-workspace.rs <WALLPAPERS_DIR>"`
+binds {
+    // To take a screenshot, use whatever keybind you want
+    Super+S { spawn-sh "niri-scripts/screeenshot <PATH_TO_SAVE_SCREENSHOT>"; }
 
-`spawn-at-startup "dir/niri-scripts/screenshot.rs <PATH_TO_SAVE_SCREENSHOT>"`
+    // To take a screenshot then annotate it, use whatever keybind you want
+    Super+Ctrl+S { spawn-sh "niri-scripts/screeenshot <PATH_TO_SAVE_SCREENSHOT> --annotate"; }
+
+    // To make the focused window sticky, use whatever keybind you want
+    Super+Shift+S { spawn-sh "niri-scripts/toggle-sticky"; }
+}
+
+```
 
 ### ARGS
 
