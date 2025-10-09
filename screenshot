@@ -90,7 +90,7 @@ fn main() {
 
 	let screenshots_dir = std::env::args().nth(1).expect("No screenshot directory specified");
 
-	let time = SystemTime::now()
+  let time = SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
 		.expect("Failed to get time");
 

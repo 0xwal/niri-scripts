@@ -1,4 +1,5 @@
 #!/usr/bin/env scriptisto
+// vim: shiftwidth=2 softtabstop=2
 
 // #region meta
 // scriptisto-begin
@@ -135,11 +136,9 @@ fn on_workspace_focused(payload: WorkspaceFocused) {
 
 	unsafe {
 		let a = &raw const ACTIVE_WALLPAPER;
-		if let Some(w) = &*a {
-			if *w == ws_id {
-				return;
-			}
-		}
+    if let Some(w) = &*a && *w == ws_id {
+      return;
+    }
 	}
 
 	unsafe {
