@@ -1,5 +1,5 @@
 #!/usr/bin/env scriptisto
-// vim: shiftwidth=2 softtabstop=2
+// vim: ft=rust shiftwidth=2 softtabstop=2
 
 // #region meta
 // scriptisto-begin
