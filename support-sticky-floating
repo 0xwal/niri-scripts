@@ -104,11 +104,6 @@ fn main() -> Result<()> {
 			Ok(line_content) => {
 				let payload = serde_json::from_str::<Event>(&line_content);
 				match payload {
-					Ok(Event::WindowOpenedOrChanged {
-						window,
-					}) => {
-						on_window_changes(window);
-					}
 					Ok(Event::WorkspaceActivated(workspace)) => {
 						on_workspace_activated(workspace);
 					}
@@ -247,39 +242,6 @@ fn on_workspace_activated(workspace: WorkspaceFocused) {
 			continue;
 		}
 		move_window_to_workspace(target.as_str(), *window).ok();
-	}
-}
-
-fn on_window_changes(window: WindowOpenedOrChanged) {
-	let already_tracked = unsafe { (*STICKY_WINDOWS).contains_key(&window.id) };
-
-	if !window.is_floating && !already_tracked {
-		return;
-	}
-
-	if window.is_floating && !already_tracked {
-		return;
-	}
-
-	if !window.is_floating {
-		unsafe {
-			(*STICKY_WINDOWS).remove(&window.id);
-		}
-		return;
-	}
-
-	let Ok(parent_workspace) = get_workspace_info(window.workspace_id) else {
-		return;
-	};
-
-	let window = FloatingWindow {
-		id: window.id,
-		workspace_id: window.workspace_id,
-		output: parent_workspace.output,
-	};
-
-	unsafe {
-		(*STICKY_WINDOWS).insert(window.id, window);
 	}
 }
 
