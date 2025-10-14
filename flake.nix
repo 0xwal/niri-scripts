@@ -65,7 +65,7 @@
           };
         };
 
-      wallpaper = wrapRs ./wallpaper-per-workspace "niri-wpw";
+      wallpaper = wrapRs ./wallpaper-per-workspace "niri-wallpaper-per-workspace";
       supportSticky = wrapRs ./support-sticky-floating "niri-support-sticky";
       screenshot = wrapRs ./screenshot "niri-screenshot";
 

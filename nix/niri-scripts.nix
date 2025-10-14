@@ -40,7 +40,6 @@ in
   };
 
   config = mkIf cfg.enable (mkMerge [
-
     (mkIf cfg.screenshot.enable {
       assertions = [
         {
@@ -50,7 +49,14 @@ in
       ];
 
       environment.systemPackages = [
-        selfPkgs.screenshot
+        (pkgs.writeShellScriptBin "niri-screenshot" ''
+          ${lib.getExe selfPkgs.screenshot} ${cfg.screenshot.dir}
+        '')
+
+        (pkgs.writeShellScriptBin "niri-screenshot-annotate" ''
+          ${lib.getExe selfPkgs.screenshot} ${cfg.screenshot.dir} --annotate
+        '')
+
         pkgs.scriptisto
         pkgs.grim
         pkgs.satty
