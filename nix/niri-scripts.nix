@@ -66,7 +66,10 @@ in
     })
 
     (mkIf cfg.sticky-window.enable {
-      environment.systemPackages = [ selfPkgs.supportSticky ];
+      environment.systemPackages = with selfPkgs.sticky; [
+        daemon
+        client
+      ];
 
       # systemd.user.services.support-sticky-floating = {
       #   enable = true;

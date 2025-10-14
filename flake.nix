@@ -26,53 +26,64 @@
       scriptisto = pkgs.scriptisto;
 
       # helper to wrap an rs script
-      wrapRs =
-        scriptFile: name:
-        pkgs.stdenv.mkDerivation rec {
-          pname = builtins.baseNameOf scriptFile; # name by file name
-          version = "0.1.0";
+      wrap =
+        scriptFile: name: isRust:
+        if isRust then
+          pkgs.stdenv.mkDerivation rec {
+            pname = builtins.baseNameOf scriptFile;
+            version = "0.1.0";
 
-          src = scriptFile;
-          dontUnpack = true;
+            src = scriptFile;
+            dontUnpack = true;
 
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-          buildInputs = [ pkgs.scriptisto ];
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            buildInputs = [ pkgs.scriptisto ];
 
-          installPhase = ''
-            mkdir -p $out/bin
-            # copy script into output
-            cp $src $out/${pname}.rs
-            # wrap
-            makeWrapper ${scriptisto}/bin/scriptisto $out/bin/${name} \
-              --add-flags "$out/${pname}.rs" \
-              --prefix PATH : ${
-                pkgs.lib.makeBinPath [
-                  unstablePkgs.rustc
-                  unstablePkgs.cargo
-                  unstablePkgs.rustPackages.clippy
-                  pkgs.gcc
-                  pkgs.pkg-config
-                ]
-              }
+            installPhase = ''
+              mkdir -p $out/bin
+              cp $src $out/${pname}.rs
+              makeWrapper ${pkgs.scriptisto}/bin/scriptisto $out/bin/${name} \
+                --add-flags "$out/${pname}.rs" \
+                --prefix PATH : ${
+                  pkgs.lib.makeBinPath [
+                    unstablePkgs.rustc
+                    unstablePkgs.cargo
+                    unstablePkgs.rustPackages.clippy
+                    pkgs.gcc
+                    pkgs.pkg-config
+                  ]
+                }
+            '';
+
+            meta = with pkgs.lib; {
+              description = "Niri scripts";
+              homepage = "https://github.com/0xWal/niri-scripts";
+              license = licenses.mit;
+              platforms = platforms.linux;
+              mainProgram = name;
+            };
+          }
+        else
+          # For non-Rust scripts: Just symlink it or wrap in a trivial script
+          pkgs.writeShellScriptBin name ''
+            exec ${scriptFile} "$@"
           '';
 
-          meta = with pkgs.lib; {
-            description = "Niri scripts";
-            homepage = "https://github.com/0xWal/niri-scripts";
-            license = licenses.mit;
-            platforms = platforms.linux;
-            mainProgram = name;
-          };
-        };
-
-      wallpaper = wrapRs ./wallpaper-per-workspace "niri-wallpaper-per-workspace";
-      supportSticky = wrapRs ./support-sticky-floating "niri-support-sticky";
-      screenshot = wrapRs ./screenshot "niri-screenshot";
+      wallpaper = wrap ./wallpaper-per-workspace "niri-wallpaper-per-workspace" true;
+      sticky = rec {
+        daemon = (wrap ./support-sticky-floating "niri-sticky-daemon") true;
+        client =
+          (wrap (pkgs.writeShellScript "niri-sticky-client-wrapper" ''
+              ${pkgs.lib.getExe daemon} toggle-sticky
+          '') "niri-sticky-client")
+            false;
+      };
+      screenshot = wrap ./screenshot "niri-screenshot" true;
 
     in
     {
       packages.${system} = {
-        supportSticky = supportSticky;
+        sticky = sticky;
         wallpaper = wallpaper;
         screenshot = screenshot;
       };
@@ -95,7 +106,8 @@
 
             services.getty.autologinUser = pkgs.lib.mkForce "niri";
             environment.systemPackages = [
-              supportSticky
+              sticky.daemon
+              sticky.client
               wallpaper
               screenshot
             ];
@@ -121,7 +133,8 @@
 
       devShells.${system}.default = pkgs.mkShell {
         packages = [
-          supportSticky
+          sticky.daemon
+          sticky.client
           wallpaper
           screenshot
         ];
@@ -141,6 +154,5 @@
       # );
 
       nixosModules.default = import ./nix/niri-scripts.nix { inherit self; };
-      # nixosModules.default = ./nix/niri-scripts.nix;
     };
 }
