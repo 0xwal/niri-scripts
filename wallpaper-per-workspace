@@ -36,26 +36,15 @@ use std::process::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-static mut ACTIVE_WALLPAPER: Option<String> = None;
+static mut ACTIVE_WALLPAPER: Option<WallpaperMeta> = None;
 static mut WALLPAPERS_DIR: *mut String = std::ptr::null_mut();
 
-// #[rustfmt::skip]
-// const WALLPAPERS: &[(&str, &str)] = &[
-//   ("1", "601-2.png"),
-//   ("2", "594-2.jpg"),
-//   ("3", "595.png"),
-//   ("4", "591-darken.png"),
-//   ("5", "572-1.png"),
-//   ("6", "571.png"),
-//   ("7", "571.png"),
-//
-//   ("w21", "601-2.png"),
-//   ("w22", "594-2.jpg"),
-//   ("w23", "595.png"),
-//   ("w24", "591-darken.png"),
-//   ("w25", "572-1.png"),
-//   ("w26", "571.png"),
-// ];
+#[derive(Debug)]
+struct WallpaperMeta {
+	path: String,
+	size: u64,
+	modified: std::time::SystemTime,
+}
 
 #[derive(Debug, serde::Deserialize)]
 struct WorkspaceFocused {
@@ -77,6 +66,18 @@ struct Workspace {
 #[derive(Debug, serde::Deserialize)]
 enum Event {
 	WorkspaceActivated(WorkspaceFocused),
+}
+
+fn get_file_meta(path: &str) -> Option<WallpaperMeta> {
+	let meta = std::fs::metadata(path).ok()?;
+	let size = meta.len();
+	let modified = meta.modified().ok()?;
+
+	Some(WallpaperMeta {
+		path: path.to_string(),
+		size,
+		modified,
+	})
 }
 
 fn check_file_exist(path: &str) -> bool {
@@ -102,9 +103,7 @@ fn get_workspace_info(id: u64) -> Option<Workspace> {
 }
 
 fn change_wallpaper(wallpaper: &str, output: &str) -> Result<()> {
-	let wallpaper = format!("{}/{wallpaper}", unsafe { &*WALLPAPERS_DIR });
-
-	if !check_file_exist(&wallpaper) {
+	if !check_file_exist(wallpaper) {
 		return Err("Wallpaper not found".into());
 	}
 
@@ -134,23 +133,53 @@ fn on_workspace_focused(payload: WorkspaceFocused) {
 		return;
 	};
 
+	let wallpaper = format!("{}/{}", unsafe { &*WALLPAPERS_DIR }, &ws_id);
+
+	let Some(wallpaper_meta) = get_file_meta(&wallpaper) else {
+		let fallback_path = format!("{}/{}", unsafe { &*WALLPAPERS_DIR }, "FALLBACK");
+
+		let Some(wallpaper_meta) = get_file_meta(&fallback_path) else {
+			return;
+		};
+
+		unsafe {
+			if let Some(ref current) = ACTIVE_WALLPAPER
+				&& current.size == wallpaper_meta.size
+				&& current.modified == wallpaper_meta.modified
+			{
+				return;
+			}
+		}
+
+		change_wallpaper(&fallback_path, &output).ok();
+
+		unsafe {
+			ACTIVE_WALLPAPER = Some(wallpaper_meta);
+		}
+
+		return;
+	};
+
 	unsafe {
-		let a = &raw const ACTIVE_WALLPAPER;
-    if let Some(w) = &*a && *w == ws_id {
-      return;
-    }
+		if let Some(ref current) = ACTIVE_WALLPAPER
+			&& current.size == wallpaper_meta.size
+			&& current.modified == wallpaper_meta.modified
+		{
+			return;
+		}
 	}
 
 	unsafe {
-		ACTIVE_WALLPAPER = Some(ws_id.to_string());
+		ACTIVE_WALLPAPER = Some(wallpaper_meta);
 	}
 
-	change_wallpaper(&ws_id, &output)
+	change_wallpaper(&wallpaper, &output)
 		.or_else(|_| change_wallpaper("FALLBACK", &output))
 		.ok();
 }
 
 fn main() -> io::Result<()> {
+	println!("wallpaper-per-workspace");
 	let wallpapers_dir = std::env::args()
 		.nth(1)
 		.or_else(|| std::env::var("WALLPAPERS_DIRS").ok())
