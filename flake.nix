@@ -74,11 +74,12 @@
         daemon = (wrap ./support-sticky-floating "niri-sticky-daemon") true;
         client =
           (wrap (pkgs.writeShellScript "niri-sticky-client-wrapper" ''
-              ${pkgs.lib.getExe daemon} toggle-sticky
+            ${pkgs.lib.getExe daemon} toggle-sticky
           '') "niri-sticky-client")
             false;
       };
       screenshot = wrap ./screenshot "niri-screenshot" true;
+      autoConsume = wrap ./auto-consume-new-windows "niri-auto-consume" true;
 
     in
     {
@@ -86,6 +87,7 @@
         sticky = sticky;
         wallpaper = wallpaper;
         screenshot = screenshot;
+        autoConsume = autoConsume;
       };
 
       nixosConfigurations.default = nixpkgs.lib.nixosSystem {
@@ -110,6 +112,7 @@
               sticky.client
               wallpaper
               screenshot
+              autoConsume
             ];
           }
           {
@@ -126,6 +129,7 @@
                 dir = "~/.wallpapers";
               };
               sticky-window.enable = true;
+              auto-consume.enable = true;
             };
           }
         ];
@@ -137,6 +141,7 @@
           sticky.client
           wallpaper
           screenshot
+          autoConsume
         ];
       };
 

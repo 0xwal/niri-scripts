@@ -29,6 +29,10 @@ in
       enable = mkEnableOption "Enable sticky window support";
     };
 
+    auto-consume = {
+      enable = mkEnableOption "Enable auto-consume new windows script";
+    };
+
     wallpaper-per-workspace = {
       enable = mkEnableOption "Enable wallpaper-per-workspace script";
       dir = mkOption {
@@ -94,6 +98,24 @@ in
       #   description = "Niri wallpaper per workspace";
       #   serviceConfig = {
       #     ExecStart = "${lib.getExe selfPkgs.wallpaper} ${cfg.wallpaper-per-workspace.dir}";
+      #     Restart = "always";
+      #     After = "niri.service";
+      #     Requires = "niri.service";
+      #   };
+      #   wantedBy = [ "default.target" ];
+      # };
+    })
+
+    (mkIf cfg.auto-consume.enable {
+      environment.systemPackages = [
+        selfPkgs.autoConsume
+      ];
+
+      # systemd.user.services.auto-consume = {
+      #   enable = true;
+      #   description = "Niri auto-consume new windows";
+      #   serviceConfig = {
+      #     ExecStart = "${lib.getExe selfPkgs.autoConsume}";
       #     Restart = "always";
       #     After = "niri.service";
       #     Requires = "niri.service";
