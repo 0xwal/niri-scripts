@@ -1,4 +1,8 @@
 #!/bin/sh
 # set ft=bash
 
-./support-sticky-floating toggle-sticky
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+exec "$script_dir/support-sticky-floating" toggle-sticky

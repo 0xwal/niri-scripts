@@ -4,7 +4,6 @@
 // scriptisto-begin
 // script_src: src/main.rs
 // build_cmd: >
-//    cargo clippy --color=always &&
 //    cargo build --release --color=always &&
 //    strip ./target/release/screenshot
 // target_bin: ./target/release/screenshot
@@ -29,6 +28,18 @@ use std::process::{
 use std::error::Error;
 
 use std::time::SystemTime;
+
+fn screenshot_lock_active(lock_file_path: &str) -> bool {
+	let Ok(contents) = std::fs::read_to_string(lock_file_path) else {
+		return false;
+	};
+
+	let Ok(pid) = contents.trim().parse::<u32>() else {
+		return false;
+	};
+
+	std::path::Path::new(&format!("/proc/{}", pid)).exists()
+}
 
 fn init_screenshot(filename: &str) -> Result<bool, Box<dyn Error>> {
 	let coords = {
@@ -72,23 +83,29 @@ fn annotate_screenshot(path: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
-	let lock_file_path = ".screenshot.lock";
+	let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+	let lock_file_path = format!("{}/screenshot.lock", runtime_dir);
 
-	if std::fs::exists(lock_file_path).unwrap_or(false) {
-		println!(
-			"Screenshot already in progress, exiting. delete {} to force",
-			lock_file_path
-		);
-		std::process::exit(0);
+	if std::fs::exists(lock_file_path.as_str()).unwrap_or(false) {
+		if screenshot_lock_active(lock_file_path.as_str()) {
+			println!(
+				"Screenshot already in progress, exiting. delete {} to force",
+				lock_file_path
+			);
+			std::process::exit(0);
+		}
+
+		std::fs::remove_file(lock_file_path.as_str()).ok();
 	}
 
-	std::fs::write(lock_file_path, "").expect("Failed to write lock file");
+	std::fs::write(lock_file_path.as_str(), std::process::id().to_string()).expect("Failed to write lock file");
 
 	defer! {
-		std::fs::remove_file(lock_file_path).ok();
+		std::fs::remove_file(lock_file_path.as_str()).ok();
 	};
 
 	let screenshots_dir = std::env::args().nth(1).expect("No screenshot directory specified");
+	std::fs::create_dir_all(&screenshots_dir).expect("Failed to create screenshot directory");
 
   let time = SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)

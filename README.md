@@ -58,10 +58,10 @@ spawn-sh-at-startup "niri-scripts/support-sticky-floating"
 
 binds {
     // To take a screenshot, use whatever keybind you want
-    Super+S { spawn-sh "niri-scripts/screeenshot <PATH_TO_SAVE_SCREENSHOT>"; }
+    Super+S { spawn-sh "niri-scripts/screenshot <PATH_TO_SAVE_SCREENSHOT>"; }
 
     // To take a screenshot then annotate it, use whatever keybind you want
-    Super+Ctrl+S { spawn-sh "niri-scripts/screeenshot <PATH_TO_SAVE_SCREENSHOT> --annotate"; }
+    Super+Ctrl+S { spawn-sh "niri-scripts/screenshot <PATH_TO_SAVE_SCREENSHOT> --annotate"; }
 
     // To make the focused window sticky, use whatever keybind you want
     Super+Shift+S { spawn-sh "niri-scripts/toggle-sticky"; }
