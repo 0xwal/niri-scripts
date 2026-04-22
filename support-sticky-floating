@@ -6,7 +6,6 @@
 // scriptisto-begin
 // script_src: src/main.rs
 // build_cmd: >
-//  cargo clippy --color=always &&
 //  cargo build --release --color=always && strip ./target/release/niri_sticky
 // target_bin: ./target/release/niri_sticky
 // files:
@@ -43,7 +42,16 @@ use std::sync::{
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 static STICKY_WINDOWS: LazyLock<RwLock<HashMap<u64, FloatingWindow>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
-const IPC_FILE: &str = "/tmp/niri-floating.sock";
+
+struct InstanceLock {
+	path: String,
+}
+
+impl Drop for InstanceLock {
+	fn drop(&mut self) {
+		std::fs::remove_file(&self.path).ok();
+	}
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct FloatingWindow {
@@ -84,13 +92,47 @@ enum Event {
 	},
 }
 
+fn runtime_dir() -> String {
+	std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string())
+}
+
+fn ipc_file() -> String {
+	format!("{}/niri-floating.sock", runtime_dir())
+}
+
+fn pid_file() -> String {
+	format!("{}/niri-floating.pid", runtime_dir())
+}
+
+fn process_alive(pid: u32) -> bool {
+	std::path::Path::new(&format!("/proc/{}", pid)).exists()
+}
+
+fn acquire_instance_lock() -> Result<InstanceLock> {
+	let pid_file = pid_file();
+
+	if let Ok(contents) = std::fs::read_to_string(&pid_file) {
+		if let Ok(pid) = contents.trim().parse::<u32>() {
+			if process_alive(pid) {
+				return Err("Sticky floating service is already running".into());
+			}
+		}
+	}
+
+	std::fs::write(&pid_file, std::process::id().to_string())?;
+	Ok(InstanceLock {
+		path: pid_file,
+	})
+}
+
 fn main() -> Result<()> {
 	if std::env::args().any(|e| e == "toggle-sticky") {
 		toggle_sticky();
 		return Ok(());
 	}
 
-	std::fs::remove_file(IPC_FILE).ok();
+	let _instance_lock = acquire_instance_lock()?;
+	std::fs::remove_file(ipc_file()).ok();
 
 	std::thread::spawn(socket_loop);
 
@@ -138,6 +180,7 @@ fn toggle_sticky() {
 		.stdout(Stdio::piped())
 		.output()
 	else {
+		eprintln!("Failed to query the focused window from niri");
 		return;
 	};
 
@@ -152,10 +195,14 @@ fn toggle_sticky() {
 	let output = String::from_utf8_lossy(&output.stdout);
 
 	let Ok(window_info) = serde_json::from_str::<WindowInfo>(&output) else {
+		eprintln!("Failed to parse focused window details from niri");
 		return;
 	};
 
-	let mut unix = UnixStream::connect(IPC_FILE).expect("Failed to connect to socket");
+	let Ok(mut unix) = UnixStream::connect(ipc_file()) else {
+		eprintln!("Sticky floating service is not running");
+		return;
+	};
 
 	unix
 		.write_all(format!("{}:{}", window_info.id, window_info.workspace_id).as_bytes())
@@ -163,7 +210,7 @@ fn toggle_sticky() {
 }
 
 fn socket_loop() {
-	let listener = UnixListener::bind(IPC_FILE).expect("We couldn't make the listener");
+	let listener = UnixListener::bind(ipc_file()).expect("We couldn't make the listener");
 
 	for stream in listener.incoming().flatten() {
 		let mut reader = BufReader::new(stream);
@@ -196,7 +243,7 @@ fn socket_loop() {
 			}
 
 			let Ok(workspace) = get_workspace_info(workspace_id) else {
-				return;
+				continue;
 			};
 
 			let window = FloatingWindow {
